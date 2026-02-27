@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Reports — KhataBook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary:     '#d63031',
+            primaryDark: '#b71c1c',
+            accent:      '#e17055',
+            surface:     '#fafafa',
+            muted:       '#6b7280',
+            success:     '#00897b',
+            warning:     '#f59e0b',
+            danger:      '#d63031',
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body class="bg-surface min-h-screen text-gray-900">
+
+  <script>
+    if (sessionStorage.getItem("kb_auth") !== "true") window.location.href = "../login.html";
+  </script>
+
+  <!-- Navbar -->
+  <nav class="bg-white border-b border-gray-200 px-6 py-0 flex items-center justify-between sticky top-0 z-40 h-14">
+    <div class="flex items-center gap-3">
+      <button onclick="window.location.href='../index.html'"
+        class="text-gray-400 hover:text-gray-800 font-bold text-lg transition-all">&#8592;</button>
+      <div class="w-px h-5 bg-gray-200"></div>
+      <div class="flex items-center gap-3">
+        <div class="bg-primary px-2 py-0.5">
+          <span class="text-white font-black text-xs tracking-widest">KB</span>
+        </div>
+        <span class="font-black text-sm text-gray-900">Global Reports</span>
+      </div>
+    </div>
+    <button onclick="downloadGlobalPDF()"
+      class="bg-primary hover:bg-primaryDark text-white px-4 py-1.5 text-xs font-bold uppercase tracking-wide transition-all">
+      Download PDF
+    </button>
+  </nav>
+
+  <div class="max-w-6xl mx-auto px-4 py-6">
+
+    <div class="mb-6">
+      <h2 class="text-2xl font-black text-gray-900 tracking-tight">Reports</h2>
+      <p class="text-muted text-sm mt-0.5">Combined view across all batches</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex gap-3 mb-6 flex-wrap">
+      <select id="filterPeriod" onchange="applyFilter()"
+        class="border border-gray-300 px-4 py-2 text-sm focus:outline-none focus:border-primary bg-white">
+        <option value="all">All Time</option>
+        <option value="thisWeek">This Week</option>
+        <option value="thisMonth">This Month</option>
+        <option value="lastMonth">Last Month</option>
+      </select>
+      <select id="filterMirchi" onchange="applyFilter()"
+        class="border border-gray-300 px-4 py-2 text-sm focus:outline-none focus:border-primary bg-white">
+        <option value="all">All Types</option>
+        <option value="bedgi">Bedgi</option>
+        <option value="jawari">Jawari</option>
+        <option value="guntur">Guntur</option>
+      </select>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-white border border-gray-200 p-5 border-l-4 border-l-accent">
+        <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">Total Revenue</p>
+        <p class="text-2xl font-black text-accent" id="gTotalRevenue">Rs.0</p>
+      </div>
+      <div class="bg-white border border-gray-200 p-5 border-l-4 border-l-primary">
+        <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">Total Profit</p>
+        <p class="text-2xl font-black text-primary" id="gTotalProfit">Rs.0</p>
+      </div>
+      <div class="bg-white border border-gray-200 p-5 border-l-4 border-l-gray-400">
+        <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">Total Sold</p>
+        <p class="text-2xl font-black text-gray-900" id="gTotalQty">0 kg</p>
+      </div>
+      <div class="bg-white border border-gray-200 p-5 border-l-4 border-l-danger">
+        <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">Total Udhaar</p>
+        <p class="text-2xl font-black text-danger" id="gTotalUdhaar">Rs.0</p>
+      </div>
+    </div>
+
+    <!-- Mirchi Type Breakdown -->
+    <div class="bg-white border border-gray-200 p-5 mb-6">
+      <h3 class="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Profit by Mirchi Type</h3>
+      <div id="mirchiTypeBreakdown" class="space-y-4"></div>
+    </div>
+
+    <!-- Monthly Trend -->
+    <div class="bg-white border border-gray-200 p-5 mb-6">
+      <h3 class="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Monthly Profit Trend</h3>
+      <div id="monthlyTrend" class="space-y-3"></div>
+    </div>
+
+    <!-- All Sales Table -->
+    <div class="bg-white border border-gray-200 p-5 mb-6">
+      <h3 class="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">All Sales</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-200 text-xs text-muted uppercase tracking-wider">
+              <th class="pb-3 text-left font-semibold">Date</th>
+              <th class="pb-3 text-left font-semibold">Customer</th>
+              <th class="pb-3 text-left font-semibold">Batch</th>
+              <th class="pb-3 text-center font-semibold">Qty</th>
+              <th class="pb-3 text-center font-semibold">Rate</th>
+              <th class="pb-3 text-center font-semibold">Total</th>
+              <th class="pb-3 text-center font-semibold">Profit</th>
+              <th class="pb-3 text-center font-semibold">Status</th>
+            </tr>
+          </thead>
+          <tbody id="allSalesTableBody"></tbody>
+        </table>
+      </div>
+      <div id="allSalesEmpty" class="hidden text-center py-8 text-muted text-sm">
+        No sales found for selected filter.
+      </div>
+    </div>
+
+    <!-- Top Customers -->
+    <div class="bg-white border border-gray-200 p-5">
+      <h3 class="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Top Customers</h3>
+      <div id="topCustomers" class="space-y-2"></div>
+    </div>
+
+  </div>
+
+  <div id="toast" class="hidden fixed bottom-6 right-6 z-50 px-5 py-3 text-white text-sm font-semibold shadow-lg fade-in"></div>
+
+  <script src="../js/config.js"></script>
+  <script>
+    let allSalesGlobal   = [];
+    let allBatchesGlobal = [];
+    let filteredSales    = [];
+
+    document.addEventListener("DOMContentLoaded", loadGlobalData);
+
+    async function loadGlobalData() {
+      try {
+        const [bRes, sRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/batches`),
+          fetch(`${API_BASE_URL}/sales`),
+        ]);
+        allBatchesGlobal = (await bRes.json()).data || [];
+        allSalesGlobal   = (await sRes.json()).data || [];
+        filteredSales    = [...allSalesGlobal];
+        renderAll();
+      } catch (err) {
+        showToast("Failed to load reports", "error");
+      }
+    }
+
+    function applyFilter() {
+      const period = document.getElementById("filterPeriod").value;
+      const mirchi = document.getElementById("filterMirchi").value;
+      const now    = new Date();
+
+      filteredSales = allSalesGlobal.filter(s => {
+        const d = s.saleDate?._seconds
+          ? new Date(s.saleDate._seconds * 1000) : new Date(s.saleDate);
+
+        let passDate = true;
+        if (period === "thisWeek") {
+          const start = new Date(now);
+          start.setDate(now.getDate() - now.getDay());
+          start.setHours(0,0,0,0);
+          passDate = d >= start;
+        } else if (period === "thisMonth") {
+          passDate = d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        } else if (period === "lastMonth") {
+          const lm  = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const end = new Date(now.getFullYear(), now.getMonth(), 0);
+          passDate  = d >= lm && d <= end;
+        }
+
+        let passMirchi = true;
+        if (mirchi !== "all") {
+          const batch = allBatchesGlobal.find(b => b.id === s.batchId);
+          passMirchi  = batch?.mirchiType === mirchi;
+        }
+        return passDate && passMirchi;
+      });
+      renderAll();
+    }
+
+    function renderAll() {
+      renderSummaryCards();
+      renderMirchiBreakdown();
+      renderMonthlyTrend();
+      renderSalesTable();
+      renderTopCustomers();
+    }
+
+    function renderSummaryCards() {
+      const rev    = filteredSales.reduce((s, x) => s + x.totalAmount, 0);
+      const profit = filteredSales.reduce((s, x) => s + x.profitOnSale, 0);
+      const qty    = filteredSales.reduce((s, x) => s + x.qtyKg, 0);
+      const udhaar = filteredSales
+        .filter(x => x.paymentStatus !== "paid")
+        .reduce((s, x) => s + (x.totalAmount - x.amountPaid), 0);
+      document.getElementById("gTotalRevenue").textContent = `Rs.${rev.toFixed(2)}`;
+      document.getElementById("gTotalProfit").textContent  = `Rs.${profit.toFixed(2)}`;
+      document.getElementById("gTotalQty").textContent     = `${qty} kg`;
+      document.getElementById("gTotalUdhaar").textContent  = `Rs.${udhaar.toFixed(2)}`;
+    }
+
+    function renderMirchiBreakdown() {
+      const types = { bedgi: {p:0,q:0}, jawari: {p:0,q:0}, guntur: {p:0,q:0} };
+      filteredSales.forEach(s => {
+        const b = allBatchesGlobal.find(x => x.id === s.batchId);
+        const t = b?.mirchiType;
+        if (t && types[t]) { types[t].p += s.profitOnSale; types[t].q += s.qtyKg; }
+      });
+      const max = Math.max(...Object.values(types).map(t => t.p), 1);
+      const colors = { bedgi: "bg-red-500", jawari: "bg-orange-500", guntur: "bg-amber-400" };
+
+      document.getElementById("mirchiTypeBreakdown").innerHTML =
+        Object.entries(types).map(([type, data]) => `
+          <div>
+            <div class="flex justify-between text-sm mb-1.5">
+              <span class="font-bold text-gray-900 capitalize">${type}</span>
+              <span class="text-muted text-xs">${data.q} kg &nbsp;|&nbsp;
+                <span class="font-bold ${data.p >= 0 ? "text-green-700" : "text-red-600"}">
+                  Rs.${data.p.toFixed(2)}
+                </span>
+              </span>
+            </div>
+            <div class="w-full bg-gray-100 h-2">
+              <div class="${colors[type]} h-2 progress-bar"
+                style="width:${Math.max((data.p / max) * 100, 0)}%"></div>
+            </div>
+          </div>
+        `).join("");
+    }
+
+    function renderMonthlyTrend() {
+      const map = {};
+      allSalesGlobal.forEach(s => {
+        const d   = s.saleDate?._seconds ? new Date(s.saleDate._seconds * 1000) : new Date(s.saleDate);
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+        const lbl = d.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+        if (!map[key]) map[key] = { label: lbl, profit: 0, qty: 0 };
+        map[key].profit += s.profitOnSale;
+        map[key].qty    += s.qtyKg;
+      });
+      const months = Object.values(map).slice(-6);
+      const max    = Math.max(...months.map(m => m.profit), 1);
+      if (months.length === 0) {
+        document.getElementById("monthlyTrend").innerHTML =
+          `<p class="text-muted text-sm text-center py-4">No data available.</p>`;
+        return;
+      }
+      document.getElementById("monthlyTrend").innerHTML = months.map(m => `
+        <div>
+          <div class="flex justify-between text-sm mb-1">
+            <span class="font-semibold text-gray-900">${m.label}</span>
+            <span class="text-muted text-xs">${m.qty} kg &nbsp;|&nbsp;
+              <span class="font-bold ${m.profit >= 0 ? "text-green-700" : "text-red-600"}">
+                Rs.${m.profit.toFixed(2)}
+              </span>
+            </span>
+          </div>
+          <div class="w-full bg-gray-100 h-2">
+            <div class="bg-primary h-2 progress-bar"
+              style="width:${Math.max((m.profit / max) * 100, 2)}%"></div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function renderSalesTable() {
+      const tbody = document.getElementById("allSalesTableBody");
+      const empty = document.getElementById("allSalesEmpty");
+      if (filteredSales.length === 0) {
+        tbody.innerHTML = "";
+        empty.classList.remove("hidden");
+        return;
+      }
+      empty.classList.add("hidden");
+
+      const stCl = {
+        paid:    "bg-green-100 text-green-800 border-green-200",
+        unpaid:  "bg-red-100 text-red-700 border-red-200",
+        partial: "bg-amber-100 text-amber-700 border-amber-200",
+      };
+
+      tbody.innerHTML = filteredSales.map(s => {
+        const date = s.saleDate?._seconds
+          ? new Date(s.saleDate._seconds * 1000).toLocaleDateString("en-IN") : "—";
+        return `
+          <tr class="border-b border-gray-100">
+            <td class="py-3 text-xs text-muted">${date}</td>
+            <td class="py-3 text-sm font-semibold text-gray-900">${s.customerName}</td>
+            <td class="py-3 text-xs text-muted">${s.batchName}</td>
+            <td class="py-3 text-center text-sm">${s.qtyKg} kg</td>
+            <td class="py-3 text-center text-sm">Rs.${s.sellingRate}</td>
+            <td class="py-3 text-center text-sm font-semibold text-accent">Rs.${s.totalAmount}</td>
+            <td class="py-3 text-center text-sm font-bold ${s.profitOnSale >= 0 ? "text-green-700" : "text-red-600"}">
+              Rs.${s.profitOnSale?.toFixed(2)}
+            </td>
+            <td class="py-3 text-center">
+              <span class="text-xs px-2 py-0.5 border font-semibold uppercase ${stCl[s.paymentStatus] || ""}">
+                ${s.paymentStatus}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function renderTopCustomers() {
+      const map = {};
+      filteredSales.forEach(s => {
+        if (!map[s.customerId]) map[s.customerId] = { name: s.customerName, qty: 0, amount: 0, profit: 0 };
+        map[s.customerId].qty    += s.qtyKg;
+        map[s.customerId].amount += s.totalAmount;
+        map[s.customerId].profit += s.profitOnSale;
+      });
+      const sorted = Object.values(map).sort((a, b) => b.amount - a.amount).slice(0, 10);
+      if (sorted.length === 0) {
+        document.getElementById("topCustomers").innerHTML =
+          `<p class="text-muted text-sm text-center py-4">No customer data yet.</p>`;
+        return;
+      }
+      document.getElementById("topCustomers").innerHTML = sorted.map((c, i) => `
+        <div class="flex items-center justify-between border border-gray-100 p-3 hover:bg-gray-50 transition-all">
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-black text-muted w-5 text-center">${i + 1}</span>
+            <div class="w-8 h-8 bg-red-100 border border-red-200 flex items-center justify-center font-black text-primary text-xs">
+              ${c.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p class="font-bold text-gray-900 text-sm">${c.name}</p>
+              <p class="text-xs text-muted">${c.qty} kg purchased</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <p class="font-black text-accent text-sm">Rs.${c.amount.toFixed(2)}</p>
+            <p class="text-xs ${c.profit >= 0 ? "text-green-700" : "text-red-600"} font-semibold">
+              Profit: Rs.${c.profit.toFixed(2)}
+            </p>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    // ─── GLOBAL PDF ────────────────────────────────────
+    function downloadGlobalPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc  = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageW = 210;
+      let y = 0;
+
+      // Header
+      doc.setFillColor(214, 48, 49);
+      doc.rect(0, 0, pageW, 22, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text("KhataBook", 14, 10);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text("Global Business Report", 14, 16);
+      doc.text(`Generated: ${new Date().toLocaleString("en-IN")}`, pageW - 14, 16, { align: "right" });
+
+      y = 30;
+
+      const period = document.getElementById("filterPeriod").value;
+      const mirchi = document.getElementById("filterMirchi").value;
+
+      doc.setTextColor(30, 30, 30);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Filter: ${period} | Mirchi: ${mirchi}`, 14, y);
+      y += 10;
+
+      doc.setDrawColor(230, 230, 230);
+      doc.line(14, y, pageW - 14, y);
+      y += 8;
+
+      const rev    = filteredSales.reduce((s, x) => s + x.totalAmount, 0);
+      const profit = filteredSales.reduce((s, x) => s + x.profitOnSale, 0);
+      const qty    = filteredSales.reduce((s, x) => s + x.qtyKg, 0);
+      const udhaar = filteredSales
+        .filter(x => x.paymentStatus !== "paid")
+        .reduce((s, x) => s + (x.totalAmount - x.amountPaid), 0);
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 30, 30);
+      doc.text("Summary", 14, y);
+      y += 6;
+
+      [["Total Revenue", `Rs.${rev.toFixed(2)}`],
+       ["Total Profit",  `Rs.${profit.toFixed(2)}`],
+       ["Total Sold",    `${qty} kg`],
+       ["Total Udhaar",  `Rs.${udhaar.toFixed(2)}`]
+      ].forEach(([lbl, val], i) => {
+        const col = i % 2 === 0 ? 14 : 110;
+        if (i % 2 === 0 && i > 0) y += 8;
+        doc.setFillColor(250, 250, 250);
+        doc.rect(col, y - 4, 90, 10, "F");
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(120, 120, 120);
+        doc.text(lbl, col + 3, y + 1);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 30, 30);
+        doc.text(val, col + 3, y + 6);
+      });
+      y += 16;
+
+      doc.line(14, y, pageW - 14, y);
+      y += 8;
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 30, 30);
+      doc.text("All Sales", 14, y);
+      y += 6;
+
+      doc.setFillColor(214, 48, 49);
+      doc.rect(14, y, pageW - 28, 8, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(7.5);
+      doc.text("Date",      17,  y + 5.5);
+      doc.text("Customer",  45,  y + 5.5);
+      doc.text("Batch",     85,  y + 5.5);
+      doc.text("Qty",       118, y + 5.5);
+      doc.text("Rate",      133, y + 5.5);
+      doc.text("Total",     150, y + 5.5);
+      doc.text("Profit",    167, y + 5.5);
+      doc.text("Status",    184, y + 5.5);
+      y += 10;
+
+      filteredSales.forEach((s, i) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        const date = s.saleDate?._seconds
+          ? new Date(s.saleDate._seconds * 1000).toLocaleDateString("en-IN") : "—";
+        if (i % 2 === 0) { doc.setFillColor(252, 252, 252); doc.rect(14, y - 3, pageW - 28, 8, "F"); }
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(30, 30, 30);
+        doc.text(date,                              17,  y + 2);
+        doc.text(s.customerName.substring(0, 16),   45,  y + 2);
+        doc.text(s.batchName.substring(0, 16),      85,  y + 2);
+        doc.text(String(s.qtyKg),                   118, y + 2);
+        doc.text(`Rs.${s.sellingRate}`,              133, y + 2);
+        doc.text(`Rs.${s.totalAmount}`,              150, y + 2);
+        doc.setTextColor(...(s.profitOnSale >= 0 ? [0,120,80] : [180,30,30]));
+        doc.text(`Rs.${s.profitOnSale?.toFixed(2)}`, 167, y + 2);
+        doc.setTextColor(...(s.paymentStatus === "paid" ? [0,120,80] : s.paymentStatus === "partial" ? [180,120,0] : [180,30,30]));
+        doc.setFont("helvetica", "bold");
+        doc.text(s.paymentStatus.toUpperCase(),      184, y + 2);
+        y += 8;
+      });
+
+      doc.setDrawColor(230, 230, 230);
+      doc.line(14, 285, pageW - 14, 285);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(160, 160, 160);
+      doc.text("KhataBook — Private Business Report", 14, 290);
+
+      doc.save(`KhataBook_Global_Report_${new Date().toISOString().split("T")[0]}.pdf`);
+      showToast("PDF downloaded successfully", "success");
+    }
+
+    function showToast(msg, type = "success") {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.className = `fixed bottom-6 right-6 z-50 px-5 py-3 text-white text-sm font-semibold shadow-lg fade-in ${
+        type === "success" ? "bg-green-700" : "bg-red-600"
+      }`;
+      t.classList.remove("hidden");
+      setTimeout(() => t.classList.add("hidden"), 3000);
+    }
+  </script>
+</body>
+</html>
