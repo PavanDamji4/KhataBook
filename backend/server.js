@@ -19,7 +19,7 @@ app.use("/api/payments", require("./routes/payments"));
 
 // Health check
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "Mirchi Hisab Backend Running 🌶️" });
+  res.json({ success: true, message: "KhataBook Backend Running " });
 });
 
 // Error Handler
