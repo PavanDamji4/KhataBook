@@ -7,8 +7,20 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// CORS — allow Vercel frontend
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5500",
+      "http://127.0.0.1:5500",
+      "http://localhost:3000",
+      /\.vercel\.app$/, // allows any vercel.app subdomain
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  }),
+);
+
 app.use(express.json());
 
 // Routes
@@ -19,13 +31,12 @@ app.use("/api/payments", require("./routes/payments"));
 
 // Health check
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "KhataBook Backend Running " });
+  res.json({ success: true, message: "KhataBook Backend Running" });
 });
 
-// Error Handler
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
